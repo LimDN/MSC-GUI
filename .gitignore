@@ -1,0 +1,13 @@
+.gradle/
+build/
+build-out/
+out/
+*.log
+# 本机专属配置（JDK 路径一类的个人环境），不提交
+msc-local.properties
+.idea/
+*.iml
+.vscode/
+# 这一份只讲控件层。仓库后面还要接界面页（dev.msc.ui.screen 那一半），前台 README
+# 等覆盖面够了再写，先不推；本地留着当笔记。
+README.md

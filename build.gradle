@@ -1,0 +1,92 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'dev.msc'
+version = '0.1.0'
+
+// 本机 F: 盘是 exFAT，没有 ACL，Gradle 清不动 build/classes 那个目录项；输出目录换一个同级名字继续构建。
+// 在 NTFS 上这条只是让产物叫 build-out 而已，不影响正确性。
+layout.buildDirectory = file('build-out')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 界面：GLFW 开窗 + OpenGL 画控件 + stb（贴图与 TrueType 字形图集，中文按钮靠它）
+    def lwjglVersion = '3.4.3'
+    api platform("org.lwjgl:lwjgl-bom:${lwjglVersion}")
+    ['lwjgl', 'lwjgl-glfw', 'lwjgl-opengl', 'lwjgl-stb'].each { module ->
+        api "org.lwjgl:${module}"
+        runtimeOnly "org.lwjgl:${module}:${lwjglVersion}:natives-windows"
+    }
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+}
+
+// 演示页单独一个源集：库的 jar 里只有控件层，不带 demo 代码
+sourceSets {
+    demo {
+        java {
+            srcDirs = ['src/demo/java']
+        }
+    }
+}
+
+// demo 源集吃库自己的那套依赖：从声明侧继承，不去继承已解析的 classpath
+configurations.demoImplementation.extendsFrom configurations.implementation
+configurations.demoRuntimeOnly.extendsFrom configurations.runtimeOnly
+dependencies {
+    demoImplementation sourceSets.main.output
+}
+
+compileDemoJava {
+    options.encoding = 'UTF-8'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.register('runDemo', JavaExec) {
+    group = 'msc-ui'
+    description = '开一面控件演示页（真窗口）；离屏出图自检的 -Dmsc.ui.* 参数同样有效'
+    dependsOn tasks.named('compileDemoJava')
+    classpath = sourceSets.demo.runtimeClasspath
+    mainClass = 'dev.msc.ui.demo.WidgetDemo'
+    standardInput = System.in
+    jvmArgs '-Xmx512m'
+    systemProperties([
+            'file.encoding'  : 'UTF-8',
+            'stdout.encoding': 'UTF-8',
+            'stderr.encoding': 'UTF-8'
+    ])
+    // 把 ./gradlew runDemo -Dmsc.ui.xxx=yyy 透传给演示进程；新增参数时在这里登记
+    ['msc.ui.dump', 'msc.ui.dump-frame', 'msc.ui.click-frame', 'msc.ui.fontdump',
+     'msc.ui.cursor', 'msc.ui.click', 'msc.ui.click2', 'msc.ui.click2-frame',
+     'msc.ui.click3', 'msc.ui.click3-frame',
+     'msc.ui.frames', 'msc.ui.hidden', 'msc.ui.width', 'msc.ui.height', 'msc.home']
+            .each { name ->
+        def value = System.getProperty(name)
+        if (value != null) {
+            systemProperty(name, value)
+        }
+    }
+}
