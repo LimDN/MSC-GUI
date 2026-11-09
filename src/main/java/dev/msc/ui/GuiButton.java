@@ -2,6 +2,7 @@ package dev.msc.ui;
 
 import java.util.Optional;
 
+
 /**
  * MC 风按钮：常态 / 悬停 / 禁用三态各一张 200x20 贴图（用户从 gui.png 里切好打包在资源内），
  * 半宽按钮走三段拉伸，左右描边不参与缩放。贴图缺了就退回程序化画。
@@ -80,7 +81,7 @@ public class GuiButton implements RowWidget {
 
     @Override
     public WidgetTip tipAt(int mouseX, int mouseY) {
-        return tooltip == null || tooltip.isEmpty() || !contains(mouseX, mouseY)
+        return !enabled || tooltip == null || tooltip.isEmpty() || !contains(mouseX, mouseY)
                 ? null
                 : new WidgetTip(this, tooltip, mouseX, mouseY, tooltipDanger);
     }
@@ -95,7 +96,6 @@ public class GuiButton implements RowWidget {
             return false;
         }
         if (enabled && action != null) {
-            UiPreferences.get().playClickSound();
             action.run();
         }
         return true;
@@ -110,7 +110,9 @@ public class GuiButton implements RowWidget {
             renderTextOnly(graphics, hovered);
             return;
         }
-        Optional<Sprite> face = UiTextures.texture(hovered ? UiTextures.BUTTON_HOVER
+        Optional<Sprite> face = UiTextures.texture(selected && enabled
+                ? UiTextures.BUTTON_DARK
+                : hovered ? UiTextures.BUTTON_HOVER
                 : enabled ? UiTextures.BUTTON_LIGHT : UiTextures.BUTTON_DARK);
         if (pressed && enabled) {
             // 按下的方式按钮：仍用 light 那张纹理，压暗到 light 与 dark 之间，再套白边
@@ -136,16 +138,26 @@ public class GuiButton implements RowWidget {
                 graphics.fill(x + 1, y + 1, width - 2, height - 2, 0x28FFFFFF);
             }
         }
+        if (selected && hovered) {
+            graphics.fill(x + 1, y + 1, width - 2, height - 2, 0x24FFFFFF);
+        }
         if (pressed) {
             graphics.outline(x, y, width, height, 0xFFFFFFFF);
         }
         Optional<Sprite> icon = iconPath == null ? Optional.empty() : UiTextures.texture(iconPath);
         if (icon.isPresent()) {
-            // 装得下就原尺寸画（24x24 的图标在 2 倍 GUI scale 下是整数倍采样，不糊）；装不下才等比缩
+            // 图标统一留 4px 内边距，并按原始宽高比缩放；不同像素尺寸的图标不会一个撑满、一个缩成一团
             Sprite sprite = icon.get();
-            int size = Math.min(height - 2, Math.min(sprite.width(), sprite.height()));
-            graphics.sprite(sprite, x + (width - size) / 2, y + (height - size) / 2, size, size,
-                    0, 0, sprite.width(), sprite.height());
+            int box = Math.max(8, Math.min(width, height) - 4);
+            int drawWidth = box;
+            int drawHeight = box;
+            if (sprite.width() > sprite.height()) {
+                drawHeight = Math.max(1, Math.round((float) box * sprite.height() / sprite.width()));
+            } else if (sprite.height() > sprite.width()) {
+                drawWidth = Math.max(1, Math.round((float) box * sprite.width() / sprite.height()));
+            }
+            graphics.sprite(sprite, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2,
+                    drawWidth, drawHeight, 0, 0, sprite.width(), sprite.height());
             return;
         }
         if (iconPath != null && label.isEmpty()) {

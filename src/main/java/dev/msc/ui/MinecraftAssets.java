@@ -27,7 +27,7 @@ import java.util.zip.ZipFile;
  */
 public final class MinecraftAssets {
     /** jar 内前缀：逻辑路径 `textures/gui/title/minecraft.png` → 资源 `/msc/textures/gui/title/minecraft.png`。 */
-    private static final String BUNDLE_PREFIX = "/msc/";
+    private static final String BUNDLE_PREFIX = "/minecraft/assets/";
     /** 1.12 线：主界面 panorama 与标题 logo 都在版本 jar 的 assets/minecraft/ 下。 */
     private static final String PREFERRED_VERSION = "1.12.2";
 
@@ -251,8 +251,22 @@ public final class MinecraftAssets {
     /** MSC 自己打包的那一份；成套的贴图（panorama）只认这个来源，不能一半 1.12 一半 1.18。 */
     public Optional<Blob> bundled(String logicalPath) {
         try (InputStream in = MinecraftAssets.class.getResourceAsStream(BUNDLE_PREFIX + logicalPath)) {
+            if (in != null) {
+                return Optional.of(new Blob("MSC 内置 msc/" + logicalPath, in.readAllBytes()));
+            }
+        } catch (IOException unreadable) {
+            // 再试旧路径 /msc/（字体、unifont 仍沿用旧位置）
+        }
+        try (InputStream in = MinecraftAssets.class.getResourceAsStream("/msc/" + logicalPath)) {
+            if (in != null) {
+                return Optional.of(new Blob("MSC 旧路径 msc/" + logicalPath, in.readAllBytes()));
+            }
+        } catch (IOException unreadable) {
+            // 再试打包的 1.18 assets
+        }
+        try (InputStream in = MinecraftAssets.class.getResourceAsStream("/msc/assets/" + logicalPath)) {
             return in == null ? Optional.empty()
-                    : Optional.of(new Blob("MSC 内置 msc/" + logicalPath, in.readAllBytes()));
+                    : Optional.of(new Blob("MSC 内置 assets/" + logicalPath, in.readAllBytes()));
         } catch (IOException unreadable) {
             return Optional.empty();
         }
@@ -294,10 +308,11 @@ public final class MinecraftAssets {
         }
     }
 
-    /** 自己带的字体：微软雅黑（含中文）→ 文黑 → 宋体，本机装什么系统就用什么，不随 MSC 分发。 */
+    /** 自己带的字体：MS Gothic（中文/日文兜底）→ 微软雅黑 → 文黑 → 宋体，本机装什么就用什么。 */
     public static Optional<Path> discoverCjkFont() {
         String windows = System.getenv("WINDIR") != null ? System.getenv("WINDIR") : "C:/Windows";
-        for (String name : new String[] {"msyh.ttc", "simhei.ttf", "simsun.ttc", "NotoSansSC-VF.ttf"}) {
+        for (String name : new String[] {"msgothic.ttc", "YuGothM.ttc", "msyh.ttc", "simhei.ttf",
+                "simsun.ttc", "NotoSansSC-VF.ttf"}) {
             Path candidate = Path.of(windows, "Fonts", name);
             if (Files.isRegularFile(candidate)) {
                 return Optional.of(candidate);
