@@ -30,6 +30,8 @@ public final class GuiTextField implements RowWidget {
     /** 上一次绘制用的画布：点选光标位置要靠它量字宽。 */
     private GuiGraphics lastGraphics;
     private boolean dragging;
+    private boolean chrome = true;
+    private boolean password;
 
     public GuiTextField(int x, int y, int width, String initial) {
         this.x = x;
@@ -48,6 +50,17 @@ public final class GuiTextField implements RowWidget {
     }
 
     /** 挂一行悬浮说明（这一栏到底填什么，指上去才说）。 */
+    /** 聊天栏等外部自绘背景的输入框：只留文字、选区和光标，不画黑框。 */
+    public GuiTextField password() {
+        password = true;
+        return this;
+    }
+
+    public GuiTextField transparentChrome() {
+        chrome = false;
+        return this;
+    }
+
     public GuiTextField setTooltip(String tooltip) {
         this.tooltip = tooltip;
         return this;
@@ -100,23 +113,26 @@ public final class GuiTextField implements RowWidget {
 
     public void render(GuiGraphics graphics, double seconds) {
         lastGraphics = graphics;
-        graphics.fill(x, y, width, HEIGHT, focused ? 0xFFFFFFA0 : 0xFFA0A0A0);
-        graphics.fill(x + 1, y + 1, width - 2, HEIGHT - 2, 0xFF000000);
+        if (chrome) {
+            graphics.fill(x, y, width, HEIGHT, focused ? 0xFFFFFFA0 : 0xFFA0A0A0);
+            graphics.fill(x + 1, y + 1, width - 2, HEIGHT - 2, 0xFF000000);
+        }
         graphics.scissor(x + 3, y + 2, width - 6, HEIGHT - 4);
         int start = Math.min(anchor, cursor);
         int end = Math.max(anchor, cursor);
+        String shown = password ? "*".repeat(text.length()) : text;
         if (focused && start < end) {
-            int left = x + 4 + graphics.textWidth(text.substring(0, start));
-            int selectedWidth = graphics.textWidth(text.substring(start, end));
+            int left = x + 4 + graphics.textWidth(shown.substring(0, start));
+            int selectedWidth = graphics.textWidth(shown.substring(start, end));
             graphics.fill(left, y + 4, selectedWidth, HEIGHT - 8, 0xFFFFFFFF);
         }
-        graphics.text(text, x + 4, y + 5, 0xFFE0E0E0);
+        graphics.text(shown, x + 4, y + 5, 0xFFE0E0E0);
         if (focused && start < end) {
-            int left = x + 4 + graphics.textWidth(text.substring(0, start));
-            graphics.text(text.substring(start, end), left, y + 5, 0xFF000080);
+            int left = x + 4 + graphics.textWidth(shown.substring(0, start));
+            graphics.text(shown.substring(start, end), left, y + 5, 0xFF000080);
         }
         if (focused && (long) (seconds * 2.0) % 2 == 0) {
-            graphics.fill(x + 4 + graphics.textWidth(text.substring(0, cursor)), y + 4, 1, HEIGHT - 8, 0xFFE0E0E0);
+            graphics.fill(x + 4 + graphics.textWidth(shown.substring(0, cursor)), y + 4, 1, HEIGHT - 8, 0xFFE0E0E0);
         }
         graphics.endScissor();
     }
@@ -207,6 +223,14 @@ public final class GuiTextField implements RowWidget {
         text = text.substring(0, cursor) + value + text.substring(cursor);
         cursor++;
         anchor = cursor;
+    }
+
+    public boolean keyChar(char value) {
+        if (!focused) {
+            return false;
+        }
+        charTyped(value);
+        return true;
     }
 
     public boolean keyPressed(int key) {

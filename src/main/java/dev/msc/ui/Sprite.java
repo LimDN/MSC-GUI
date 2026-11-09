@@ -59,6 +59,80 @@ public final class Sprite implements AutoCloseable {
         return id;
     }
 
+    /** 读整张 RGBA 为 ARGB 数组；物品侧面按实际不透明轮廓取色时用。 */
+    public int[] pixels() {
+        if (format != FORMAT_RGBA) {
+            return new int[width * height];
+        }
+        ByteBuffer pixels = allocate(width * height * 4);
+        try {
+            bind();
+            GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA,
+                    GL11.GL_UNSIGNED_BYTE, pixels);
+            int[] argb = new int[width * height];
+            for (int i = 0; i < argb.length; i++) {
+                int base = i * 4;
+                argb[i] = ((pixels.get(base + 3) & 0xFF) << 24)
+                        | ((pixels.get(base) & 0xFF) << 16)
+                        | ((pixels.get(base + 1) & 0xFF) << 8)
+                        | (pixels.get(base + 2) & 0xFF);
+            }
+            return argb;
+        } finally {
+            MemoryUtil.memFree(pixels);
+        }
+    }
+
+    /** 取单个像素的颜色（0xRRGGBB）；读不到就返回 0x808080。 */
+    public int pixelColor(int x, int y) {
+        if (format != FORMAT_RGBA || x < 0 || y < 0 || x >= width || y >= height) {
+            return 0x808080;
+        }
+        ByteBuffer pixels = allocate(width * height * 4);
+        try {
+            bind();
+            GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA,
+                    GL11.GL_UNSIGNED_BYTE, pixels);
+            int base = (y * width + x) * 4;
+            return ((pixels.get(base) & 0xFF) << 16)
+                    | ((pixels.get(base + 1) & 0xFF) << 8)
+                    | (pixels.get(base + 2) & 0xFF);
+        } finally {
+            MemoryUtil.memFree(pixels);
+        }
+    }
+
+    /** 返回不透明像素的包围盒 [x0,y0,x1,y1]（含端点）；全透明返回整张图。 */
+    public int[] opaqueBounds() {
+        if (format != FORMAT_RGBA) {
+            return new int[]{0, 0, width - 1, height - 1};
+        }
+        ByteBuffer pixels = allocate(width * height * 4);
+        try {
+            bind();
+            GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA,
+                    GL11.GL_UNSIGNED_BYTE, pixels);
+            int x0 = width;
+            int y0 = height;
+            int x1 = -1;
+            int y1 = -1;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    if ((pixels.get((y * width + x) * 4 + 3) & 0xFF) > 8) {
+                        x0 = Math.min(x0, x);
+                        y0 = Math.min(y0, y);
+                        x1 = Math.max(x1, x);
+                        y1 = Math.max(y1, y);
+                    }
+                }
+            }
+            return x1 < 0 ? new int[]{0, 0, width - 1, height - 1}
+                    : new int[]{x0, y0, x1, y1};
+        } finally {
+            MemoryUtil.memFree(pixels);
+        }
+    }
+
     /** 从纹理取一块到 RGBA 缓冲，程序化贴图生成用。 */
     public static ByteBuffer allocate(int bytes) {
         return MemoryUtil.memAlloc(bytes);
